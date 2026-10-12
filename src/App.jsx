@@ -3,6 +3,7 @@ import { cloudEnabled, getSession, signOut } from "./cloud.js";
 import Home from "./Home.jsx";
 import AuthForm from "./AuthForm.jsx";
 import Tracker from "./Tracker.jsx";
+import NameGate from "./NameGate.jsx";
 
 const ROUTES = ["home", "login", "signup", "tracker"];
 const readRoute = () => {
@@ -50,11 +51,12 @@ export default function App() {
         </nav>
       </header>
 
-      {view === "home" && <Home loggedIn={Boolean(session)} go={go} />}
+      {session && !session.user.name && <NameGate onSaved={refreshSession} onSignOut={logout} />}
+      {!(session && !session.user.name) && view === "home" && <Home loggedIn={Boolean(session)} go={go} />}
       {(view === "login" || view === "signup") && (
         <AuthForm mode={view} go={go} onDone={() => { refreshSession(); go("tracker"); }} />
       )}
-      {view === "tracker" && session && (
+      {view === "tracker" && session && session.user.name && (
         <Tracker key={session.user.id} session={session} onSignOut={logout} onSessionChange={refreshSession} />
       )}
     </>

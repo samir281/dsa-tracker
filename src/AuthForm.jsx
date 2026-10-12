@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { signIn, signUp } from "./cloud.js";
+import { signIn, signUp, updateDisplayName } from "./cloud.js";
 
 export default function AuthForm({ mode, go, onDone }) {
   const isSignup = mode === "signup";
@@ -16,6 +16,10 @@ export default function AuthForm({ mode, go, onDone }) {
     setBusy(true); setError("");
     try {
       const s = isSignup ? await signUp(email.trim(), password, name.trim().slice(0, 24)) : await signIn(email.trim(), password);
+      // Login with a name typed in: save it as the leaderboard name.
+      if (s && !isSignup && name.trim() && name.trim() !== s.user.name) {
+        try { await updateDisplayName(name.trim().slice(0, 24)); } catch (e) { /* the name prompt will ask again */ }
+      }
       if (s) onDone();
       else setError("Account created. Open the confirmation email, then come back and log in.");
     } catch (err) {
@@ -32,12 +36,11 @@ export default function AuthForm({ mode, go, onDone }) {
       </p>
       <form onSubmit={submit}>
         <div className="form-grid" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
-          {isSignup && (
-            <div className="field">
-              <label htmlFor="a-name">Name on leaderboard</label>
-              <input id="a-name" value={name} maxLength={24} autoComplete="nickname" onChange={(e) => setName(e.target.value)} placeholder="Samir" />
-            </div>
-          )}
+          <div className="field">
+            <label htmlFor="a-name">Name on leaderboard{isSignup ? "" : " (optional)"}</label>
+            <input id="a-name" value={name} maxLength={24} autoComplete="nickname" onChange={(e) => setName(e.target.value)} placeholder="Samir" />
+            {!isSignup && <span className="hint">Fill this to save or change your name while logging in.</span>}
+          </div>
           <div className="field">
             <label htmlFor="a-email">Email</label>
             <input id="a-email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />

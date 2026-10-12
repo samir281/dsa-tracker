@@ -48,6 +48,8 @@ function Leaderboard() {
     return () => { alive = false; clearInterval(t); document.removeEventListener("visibilitychange", onVisible); };
   }, [days]);
 
+  const topPoints = rows && rows.length ? Math.max(1, ...rows.map((r) => r.points)) : 1;
+
   return (
     <section aria-label="Leaderboard">
       <div className="lb-head">
@@ -86,13 +88,16 @@ function Leaderboard() {
             <tbody>
               {rows.map((r, i) => (
                 <tr key={r.display_name + i} className={i === 0 ? "first" : ""}>
-                  <td className="rank num">{i + 1}</td>
+                  <td className="rank num">{String(i + 1).padStart(2, "0")}</td>
                   <td className="who">{r.display_name}</td>
                   <td className="n num">{r.easy}</td>
                   <td className="n num">{r.medium}</td>
                   <td className="n num">{r.hard}</td>
                   <td className="n num">{r.total}</td>
-                  <td className="n num pts">{r.points}</td>
+                  <td className="n num pts">
+                    {r.points}
+                    <span className="bar" style={{ width: `${Math.max(8, Math.round((r.points / topPoints) * 100))}%` }} aria-hidden="true" />
+                  </td>
                 </tr>
               ))}
             </tbody>
