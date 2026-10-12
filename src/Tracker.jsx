@@ -156,6 +156,11 @@ export default function Tracker({ session, profile, onSignOut, onSessionChange, 
       add(p.solvedOn, "solved", p);
       const log = p.log || [];
       log.forEach((e) => add(e.d, e.k, p));
+      // marked before the day log existed: its redo date is always mark date + REDO_GAP_DAYS
+      if (p.redo && p.redoOn) {
+        const markedDay = addDays(p.redoOn, -REDO_GAP_DAYS);
+        if (!log.some((e) => e.k === "marked" && e.d === markedDay)) add(markedDay, "marked", p);
+      }
       // problems redone before the day log existed: keep their last redo date
       if (p.lastRedoneOn && !log.some((e) => e.k === "redone" && e.d === p.lastRedoneOn)) add(p.lastRedoneOn, "redone", p);
     });
@@ -491,7 +496,6 @@ export default function Tracker({ session, profile, onSignOut, onSessionChange, 
           By pattern<span className="count">{groups.length}</span>
         </button>
         <button className="tab" role="tab" aria-selected={tab === "profile"} onClick={() => setTab("profile")}>Profile</button>
-        <button className="tab" role="tab" aria-selected={tab === "profile"} onClick={() => setTab("profile")}>Profile</button>
       </div>
 
       {tab === "redo" && (
@@ -560,10 +564,6 @@ export default function Tracker({ session, profile, onSignOut, onSessionChange, 
             <div className="list">{done.map((p) => renderCard(p, "done"))}</div>
           )}
         </>
-      )}
-
-      {tab === "profile" && (
-        <Account session={session} profile={profile} onSessionChange={onSessionChange} onProfileChange={onProfileChange} onSignOut={onSignOut} />
       )}
 
       {tab === "profile" && (
