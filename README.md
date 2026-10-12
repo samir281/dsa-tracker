@@ -18,8 +18,17 @@ Vite + React + Supabase.
 3. Site configuration > Environment variables: `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
 4. Deploy. After changing variables, trigger a new deploy.
 
+## Short ID login and account settings
+- Sign up asks for a name, a short ID, an email and a password. Short ID: 3 to 20 characters, a-z 0-9 . - _ (not case sensitive), must be unique.
+- Login accepts either the short ID or the email (anything with "@" is treated as an email).
+- The short ID lookup never reveals an email. The server checks the password itself, and allows 8 tries per 10 minutes per short ID.
+- Accounts made before short IDs existed are asked for a short ID once after their next login.
+- My tracker > Account: change short ID, email or password.
+- Email change: with "Confirm email" OFF it applies at once. With it ON, Supabase mails a confirmation link and the old email keeps working until it is opened.
+- Needs the latest `supabase.sql` (adds `profiles`, `login_attempts`, `short_id_available`, `login_email`).
+
 ## First login
-Sign up with a name, email and password. To load the problems from the earlier tracker, open "My tracker" > Import backup > choose `samir-starter-problems.json`.
+Sign up with a name, short ID, email and password. To load the problems from the earlier tracker, open "My tracker" > Import backup > choose `samir-starter-problems.json`.
 
 ## Run locally
 cp .env.example .env   (fill in the two values)
@@ -27,6 +36,6 @@ npm install
 npm run dev
 
 ## Known limits
-- The leaderboard counts problems by the server time they were first logged, so editing the "Solved on" date does not change it. Deleting a problem removes it from the count. Nothing stops someone from logging made-up problems, so use it with friends you trust.
+- The leaderboard counts a problem on its "Solved on" date (never later than the day it was logged, India time). Deleting a problem removes it from the count. Nothing stops someone from logging made-up problems, so use it with friends you trust.
 - Display names are public and can repeat.
 - Password reset is not built in. Use Authentication > Users in Supabase.

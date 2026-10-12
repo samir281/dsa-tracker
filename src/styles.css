@@ -226,3 +226,11 @@ table.lb tr.first td.n.pts { color: var(--accent); text-shadow: 0 0 14px rgba(25
 /* ---------- account panel ---------- */
 .panel.account { margin-top: 18px; margin-bottom: 0; }
 .account-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+
+dl.acct { margin: 10px 0 0; display: flex; flex-direction: column; }
+.acct-row { display: grid; grid-template-columns: 90px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid rgba(120, 180, 255, 0.09); }
+.acct-row:last-child { border-bottom: none; }
+.acct-row dt { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); }
+.acct-row dd { margin: 0; overflow-wrap: anywhere; }
+.note { margin: 10px 0 0; color: var(--ok); font-size: 0.88rem; }
+.acct-form { margin-top: 6px; padding-top: 10px; border-top: 1px solid var(--line); }

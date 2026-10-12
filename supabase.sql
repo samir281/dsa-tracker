@@ -70,3 +70,86 @@ $$;
 
 revoke all on function public.leaderboard(int) from public;
 grant execute on function public.leaderboard(int) to anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Short ID login: each user picks a short ID (like "samir") and can log in with it instead of the email.
+-- ---------------------------------------------------------------------------
+create table if not exists public.profiles (
+  user_id    uuid primary key default auth.uid() references auth.users (id) on delete cascade,
+  short_id   text not null,
+  created_at timestamptz not null default now(),
+  constraint short_id_format check (short_id ~ '^[a-z0-9_.-]{3,20}$')
+);
+create unique index if not exists profiles_short_id_key on public.profiles (short_id);
+
+alter table public.profiles enable row level security;
+
+-- Each user can read, create and change only their own profile row.
+drop policy if exists "own profile" on public.profiles;
+create policy "own profile" on public.profiles
+  for all
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid());
+
+-- Failed and successful tries are counted here to slow down password guessing through the short ID route.
+create table if not exists public.login_attempts (
+  short_id text not null,
+  at       timestamptz not null default now()
+);
+create index if not exists login_attempts_idx on public.login_attempts (short_id, at);
+alter table public.login_attempts enable row level security; -- no policies: only the function below can touch it
+
+-- Public: is this short ID free? (used on the sign up form)
+create or replace function public.short_id_available(p_short_id text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select lower(trim(p_short_id)) ~ '^[a-z0-9_.-]{3,20}$'
+     and not exists (select 1 from public.profiles where short_id = lower(trim(p_short_id)));
+$$;
+
+-- Public: turns (short ID + password) into the login email, but ONLY when the password is right.
+-- The email is never returned to someone who does not already know the password.
+-- After 8 tries in 10 minutes for the same short ID it refuses with 'too_many_attempts'.
+create or replace function public.login_email(p_short_id text, p_password text)
+returns text
+language plpgsql
+security definer
+set search_path = public, auth, extensions
+as $$
+declare
+  sid text := lower(trim(p_short_id));
+  v_email text;
+  v_hash text;
+  recent int;
+begin
+  delete from public.login_attempts where at < now() - interval '1 day';
+  select count(*) into recent from public.login_attempts where short_id = sid and at > now() - interval '10 minutes';
+  if recent >= 8 then
+    raise exception 'too_many_attempts';
+  end if;
+  insert into public.login_attempts (short_id) values (sid);
+
+  select u.email, u.encrypted_password into v_email, v_hash
+  from public.profiles pr
+  join auth.users u on u.id = pr.user_id
+  where pr.short_id = sid;
+
+  if v_hash is null or v_hash = '' then
+    return null;
+  end if;
+  if crypt(p_password, v_hash) = v_hash then
+    delete from public.login_attempts where short_id = sid;
+    return v_email;
+  end if;
+  return null;
+end;
+$$;
+
+revoke all on function public.short_id_available(text) from public;
+revoke all on function public.login_email(text, text) from public;
+grant execute on function public.short_id_available(text) to anon, authenticated;
+grant execute on function public.login_email(text, text) to anon, authenticated;

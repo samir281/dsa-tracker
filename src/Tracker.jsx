@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   REDO_GAP_DAYS, KNOWN, addDays, canonicalPattern, diffDays, fmt, fmtFull, newId, patKey, todayISO,
 } from "./lib.js";
-import { deleteMany, fetchAll, updateDisplayName, updatePassword, upsertMany } from "./cloud.js";
+import { deleteMany, fetchAll, updateDisplayName, upsertMany } from "./cloud.js";
+import Account from "./Account.jsx";
 
 const MAX_FILE_BYTES = 300 * 1024;
 
@@ -20,7 +21,7 @@ const emptyForm = () => ({
   name: "", pattern: "", difficulty: "Medium", link: "", solvedOn: todayISO(), notes: "", solution: "",
 });
 
-export default function Tracker({ session, onSignOut, onSessionChange }) {
+export default function Tracker({ session, profile, onSignOut, onSessionChange, onProfileChange }) {
   const uid = session.user.id;
   const [problems, setProblems] = useState(() => loadCache(uid));
   const [tab, setTab] = useState("redo");
@@ -35,7 +36,6 @@ export default function Tracker({ session, onSignOut, onSessionChange }) {
   const [toast, setToast] = useState("");
   const [fileNames, setFileNames] = useState({ notes: "", solution: "" });
   const [nameEdit, setNameEdit] = useState(null);
-  const [pw, setPw] = useState(null); // null = closed, otherwise { next, again, busy, error }
   const formRef = useRef(null);
   const importRef = useRef(null);
 
@@ -269,20 +269,6 @@ export default function Tracker({ session, onSignOut, onSessionChange }) {
       setToast("Leaderboard name updated");
     } catch (e) {
       if (e && e.code === "auth") onSignOut(); else setToast(e.message || "Could not update the name");
-    }
-  };
-
-  const savePassword = async () => {
-    if (pw.next.length < 6) return setPw({ ...pw, error: "Use at least 6 characters." });
-    if (pw.next !== pw.again) return setPw({ ...pw, error: "The two passwords do not match." });
-    setPw({ ...pw, busy: true, error: "" });
-    try {
-      await updatePassword(pw.next);
-      setPw(null);
-      setToast("Password changed");
-    } catch (e) {
-      if (e && e.code === "auth") onSignOut();
-      else setPw({ ...pw, busy: false, error: e.message || "Could not change the password." });
     }
   };
 
@@ -540,34 +526,7 @@ export default function Tracker({ session, onSignOut, onSessionChange }) {
           onChange={(e) => importJson(e.target.files[0])} />
       </div>
 
-      <div className="panel account">
-        <div className="account-head">
-          <div>
-            <h2>Account</h2>
-            <p className="hint" style={{ margin: "2px 0 0" }}>Signed in as {session.user.email}</p>
-          </div>
-          {pw === null && <button className="btn small" onClick={() => setPw({ next: "", again: "", busy: false, error: "" })}>Change password</button>}
-        </div>
-        {pw !== null && (
-          <form onSubmit={(e) => { e.preventDefault(); savePassword(); }}>
-            <div className="form-grid">
-              <div className="field">
-                <label htmlFor="pw-new">New password</label>
-                <input id="pw-new" type="password" autoComplete="new-password" value={pw.next} onChange={(e) => setPw({ ...pw, next: e.target.value })} />
-              </div>
-              <div className="field">
-                <label htmlFor="pw-again">Type it again</label>
-                <input id="pw-again" type="password" autoComplete="new-password" value={pw.again} onChange={(e) => setPw({ ...pw, again: e.target.value })} />
-              </div>
-            </div>
-            {pw.error && <div className="err" role="alert">{pw.error}</div>}
-            <div className="actions">
-              <button type="submit" className="btn primary" disabled={pw.busy}>Save new password</button>
-              <button type="button" className="btn" onClick={() => setPw(null)}>Cancel</button>
-            </div>
-          </form>
-        )}
-      </div>
+      <Account session={session} profile={profile} onSessionChange={onSessionChange} onProfileChange={onProfileChange} onSignOut={onSignOut} />
 
       {toast && <div className="toast" role="status">{toast}</div>}
     </>

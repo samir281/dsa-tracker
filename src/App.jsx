@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { cloudEnabled, getSession, signOut } from "./cloud.js";
+import { cloudEnabled, getProfile, getSession, signOut } from "./cloud.js";
 import Home from "./Home.jsx";
 import AuthForm from "./AuthForm.jsx";
 import Tracker from "./Tracker.jsx";
-import NameGate from "./NameGate.jsx";
+import ProfileGate from "./ProfileGate.jsx";
 
 const ROUTES = ["home", "login", "signup", "tracker"];
 const readRoute = () => {
@@ -14,12 +14,28 @@ const readRoute = () => {
 export default function App() {
   const [session, setSession] = useState(() => (cloudEnabled ? getSession() : null));
   const [route, setRoute] = useState(readRoute);
+  // profile: undefined = still loading, null = this account has no short ID yet, object = { short_id }
+  const [profile, setProfile] = useState(undefined);
 
   useEffect(() => {
     const onHash = () => setRoute(readRoute());
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
+
+  const uid = session && session.user.id;
+  useEffect(() => {
+    if (!uid) { setProfile(undefined); return undefined; }
+    let alive = true;
+    getProfile()
+      .then((p) => { if (alive) setProfile(p); })
+      .catch((e) => {
+        if (!alive) return;
+        if (e && e.code === "auth") { signOut(); setSession(null); }
+        else setProfile((prev) => (prev === undefined ? { short_id: "" } : prev)); // offline: do not block the app
+      });
+    return () => { alive = false; };
+  }, [uid]);
 
   const go = (r) => { window.location.hash = r === "home" ? "/" : "/" + r; setRoute(r); window.scrollTo(0, 0); };
   const refreshSession = () => setSession(getSession() ? { ...getSession() } : null);
@@ -30,6 +46,8 @@ export default function App() {
   if (view === "tracker" && !session) view = "login";
   if ((view === "login" || view === "signup") && session) view = "tracker";
   if (!cloudEnabled && view !== "home") view = "home";
+
+  const needsProfile = Boolean(session) && (!session.user.name || profile === null);
 
   return (
     <>
@@ -51,13 +69,21 @@ export default function App() {
         </nav>
       </header>
 
-      {session && !session.user.name && <NameGate onSaved={refreshSession} onSignOut={logout} />}
-      {!(session && !session.user.name) && view === "home" && <Home loggedIn={Boolean(session)} go={go} />}
+      {needsProfile && (
+        <ProfileGate
+          needName={!session.user.name}
+          needShortId={profile === null}
+          onSaved={() => { refreshSession(); getProfile().then(setProfile).catch(() => {}); }}
+          onSignOut={logout}
+        />
+      )}
+      {!needsProfile && view === "home" && <Home loggedIn={Boolean(session)} go={go} />}
       {(view === "login" || view === "signup") && (
         <AuthForm mode={view} go={go} onDone={() => { refreshSession(); go("tracker"); }} />
       )}
-      {view === "tracker" && session && session.user.name && (
-        <Tracker key={session.user.id} session={session} onSignOut={logout} onSessionChange={refreshSession} />
+      {view === "tracker" && session && !needsProfile && (
+        <Tracker key={session.user.id} session={session} profile={profile} onSignOut={logout}
+          onSessionChange={refreshSession} onProfileChange={setProfile} />
       )}
     </>
   );

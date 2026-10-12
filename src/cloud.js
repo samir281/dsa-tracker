@@ -120,6 +120,7 @@ async function rest(path, { method = "GET", body, prefer } = {}, retried = false
   }
   if (res.status === 401 && !retried) { await refresh(); return rest(path, { method, body, prefer }, true); }
   if (res.status === 401) { signOut(); throw new CloudError("Your session expired. Sign in again.", "auth"); }
+  if (res.status === 409) throw new CloudError("That short ID is already taken.", "conflict");
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new CloudError(`Server error ${res.status}. ${text.slice(0, 160)}`, "server");
@@ -150,6 +151,59 @@ export async function updateDisplayName(name) {
 export async function updatePassword(password) {
   await ensureFresh();
   await authCall("user", { password }, { method: "PUT", token: session.access_token });
+}
+
+/* ---------- short ID (username) ---------- */
+export const SHORT_ID_RE = /^[a-z0-9_.-]{3,20}$/;
+export const normalizeShortId = (v) => String(v || "").trim().toLowerCase();
+
+async function anonRpc(name, args) {
+  let res;
+  try {
+    res = await fetch(`${BASE}/rest/v1/rpc/${name}`, {
+      method: "POST",
+      headers: { apikey: ANON, "Content-Type": "application/json" },
+      body: JSON.stringify(args),
+    });
+  } catch (e) {
+    throw new CloudError("Cannot reach the server. Check your internet and try again.", "network");
+  }
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    if (text.includes("too_many_attempts")) throw new CloudError("Too many tries for this short ID. Wait 10 minutes and try again.", "throttled");
+    if (res.status === 404) throw new CloudError("Short ID login is not set up yet. Run supabase.sql in Supabase.", "server");
+    throw new CloudError(`Server error ${res.status}.`, "server");
+  }
+  return res.json();
+}
+
+export const shortIdAvailable = (shortId) => anonRpc("short_id_available", { p_short_id: shortId });
+
+export async function signInWithShortId(shortId, password) {
+  const email = await anonRpc("login_email", { p_short_id: shortId, p_password: password });
+  if (!email) throw new CloudError("Invalid login credentials", "auth_failed");
+  return signIn(email, password);
+}
+
+export async function getProfile() {
+  const rows = await rest("profiles?select=short_id");
+  return rows && rows.length ? rows[0] : null;
+}
+export const createProfile = (shortId) =>
+  rest("profiles", { method: "POST", prefer: "return=minimal", body: { user_id: session.user.id, short_id: shortId } });
+export const changeShortId = (shortId) =>
+  rest(`profiles?user_id=eq.${session.user.id}`, { method: "PATCH", prefer: "return=minimal", body: { short_id: shortId } });
+
+// Returns { changed: true } when the new email is active now, { changed: false } when Supabase is waiting for a confirmation link.
+export async function updateEmail(email) {
+  await ensureFresh();
+  const body = await authCall("user", { email }, { method: "PUT", token: session.access_token });
+  const changed = String(body.email || "").toLowerCase() === email.toLowerCase();
+  if (changed) {
+    session = { ...session, user: { ...session.user, email: body.email } };
+    writeSession(session);
+  }
+  return { changed };
 }
 
 // Public: works without signing in. Returns [{display_name, easy, medium, hard, total, points}].
