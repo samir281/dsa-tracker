@@ -234,3 +234,9 @@ dl.acct { margin: 10px 0 0; display: flex; flex-direction: column; }
 .acct-row dd { margin: 0; overflow-wrap: anywhere; }
 .note { margin: 10px 0 0; color: var(--ok); font-size: 0.88rem; }
 .acct-form { margin-top: 6px; padding-top: 10px; border-top: 1px solid var(--line); }
+
+.who-links { display: flex; gap: 8px; margin-top: 3px; font-family: var(--font-body, inherit); font-weight: 500; font-size: 0.72rem; }
+.who-links a { color: var(--accent); text-decoration: none; border-bottom: 1px dashed currentColor; }
+.link-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; margin-bottom: 14px; }
+.check { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; color: var(--muted); }
+.check input { width: 18px; height: 18px; accent-color: var(--accent); }

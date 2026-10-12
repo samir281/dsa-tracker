@@ -186,9 +186,11 @@ export async function signInWithShortId(shortId, password) {
 }
 
 export async function getProfile() {
-  const rows = await rest("profiles?select=short_id");
+  const rows = await rest("profiles?select=short_id,github_url,linkedin_url,show_github,show_linkedin");
   return rows && rows.length ? rows[0] : null;
 }
+export const saveLinks = (fields) =>
+  rest(`profiles?user_id=eq.${session.user.id}`, { method: "PATCH", prefer: "return=minimal", body: fields });
 export const createProfile = (shortId) =>
   rest("profiles", { method: "POST", prefer: "return=minimal", body: { user_id: session.user.id, short_id: shortId } });
 export const changeShortId = (shortId) =>
@@ -206,7 +208,7 @@ export async function updateEmail(email) {
   return { changed };
 }
 
-// Public: works without signing in. Returns [{display_name, easy, medium, hard, total, points}].
+// Public: works without signing in. Returns [{display_name, easy, medium, hard, total, points, github, linkedin}].
 export async function getLeaderboard(days) {
   let res;
   try {

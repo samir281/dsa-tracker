@@ -7,6 +7,14 @@ const IST_MS = 5.5 * 60 * 60 * 1000;  // blocks line up with India time
 
 const blockIndex = (now) => Math.floor((now + IST_MS) / BLOCK_MS);
 
+// Only ever render links that really point to the expected site over https.
+const safeLink = (url, host) => {
+  try {
+    const u = new URL(url);
+    return u.protocol === "https:" && (u.hostname === host || u.hostname.endsWith("." + host));
+  } catch (e) { return false; }
+};
+
 function QuoteCard() {
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
@@ -25,7 +33,7 @@ function QuoteCard() {
 }
 
 function Leaderboard() {
-  const [days, setDays] = useState(3);
+  const [days, setDays] = useState(1);
   const [rows, setRows] = useState(null);
   const [error, setError] = useState("");
 
@@ -55,11 +63,11 @@ function Leaderboard() {
       <div className="lb-head">
         <div>
           <h2>Leaderboard</h2>
-          <p className="hint">Problems logged {days === 1 ? "today" : "in the last 3 days"}. Points: Easy 1, Medium 2, Hard 3.</p>
+          <p className="hint">Problems logged {days === 1 ? "today" : "overall (all time)"}. Points: Easy 1, Medium 2, Hard 3.</p>
         </div>
         <div className="seg" role="group" aria-label="Time range">
           <button aria-pressed={days === 1} onClick={() => setDays(1)}>Today</button>
-          <button aria-pressed={days === 3} onClick={() => setDays(3)}>Last 3 days</button>
+          <button aria-pressed={days === 0} onClick={() => setDays(0)}>Overall</button>
         </div>
       </div>
 
@@ -70,7 +78,7 @@ function Leaderboard() {
       ) : rows === null ? (
         <div className="empty">Loading the leaderboard...</div>
       ) : rows.length === 0 ? (
-        <div className="empty"><b>Nobody has logged a problem {days === 1 ? "today" : "in the last 3 days"}</b>Sign up and log the first one to take rank 1.</div>
+        <div className="empty"><b>Nobody has logged a problem {days === 1 ? "today" : "yet"}</b>Sign up and log the first one to take rank 1.</div>
       ) : (
         <div className="table-wrap">
           <table className="lb">
@@ -89,7 +97,15 @@ function Leaderboard() {
               {rows.map((r, i) => (
                 <tr key={r.display_name + i} className={i === 0 ? "first" : ""}>
                   <td className="rank num">{String(i + 1).padStart(2, "0")}</td>
-                  <td className="who">{r.display_name}</td>
+                  <td className="who">
+                    {r.display_name}
+                    {(safeLink(r.github, "github.com") || safeLink(r.linkedin, "linkedin.com")) && (
+                      <span className="who-links">
+                        {safeLink(r.github, "github.com") && <a href={r.github} target="_blank" rel="noopener noreferrer nofollow" aria-label={`${r.display_name} on GitHub`}>GitHub</a>}
+                        {safeLink(r.linkedin, "linkedin.com") && <a href={r.linkedin} target="_blank" rel="noopener noreferrer nofollow" aria-label={`${r.display_name} on LinkedIn`}>LinkedIn</a>}
+                      </span>
+                    )}
+                  </td>
                   <td className="n num">{r.easy}</td>
                   <td className="n num">{r.medium}</td>
                   <td className="n num">{r.hard}</td>

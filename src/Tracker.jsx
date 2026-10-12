@@ -4,6 +4,7 @@ import {
 } from "./lib.js";
 import { deleteMany, fetchAll, updateDisplayName, upsertMany } from "./cloud.js";
 import Account from "./Account.jsx";
+import Links from "./Links.jsx";
 
 const MAX_FILE_BYTES = 300 * 1024;
 
@@ -31,6 +32,7 @@ export default function Tracker({ session, profile, onSignOut, onSessionChange, 
   const [formError, setFormError] = useState("");
   const [open, setOpen] = useState({});
   const [filter, setFilter] = useState("");
+  const [dayFilter, setDayFilter] = useState(""); // "" = all dates, else YYYY-MM-DD
   const [confirmDel, setConfirmDel] = useState(null);
   const [today, setToday] = useState(todayISO());
   const [toast, setToast] = useState("");
@@ -129,6 +131,7 @@ export default function Tracker({ session, profile, onSignOut, onSessionChange, 
     return () => clearTimeout(t);
   }, [toast]);
 
+  const logOf = (p, k) => [...(p.log || []), { d: todayISO(), k }];
   const patch = (id, fields) =>
     setProblems((list) => list.map((p) => (p.id === id ? { ...p, ...fields, updatedAt: Date.now() } : p)));
 
@@ -140,6 +143,27 @@ export default function Tracker({ session, profile, onSignOut, onSessionChange, 
     () => problems.filter((p) => !p.redo).sort((a, b) => (b.solvedOn || "").localeCompare(a.solvedOn || "")),
     [problems]
   );
+  // Day-wise activity: solved (first time), redone (finished a redo), marked (sent to redo).
+  const activity = useMemo(() => {
+    const byDay = new Map();
+    const add = (d, k, p) => {
+      if (!d) return;
+      if (!byDay.has(d)) byDay.set(d, { solved: [], redone: [], marked: [] });
+      const list = byDay.get(d)[k];
+      if (!list.includes(p)) list.push(p);
+    };
+    problems.forEach((p) => {
+      add(p.solvedOn, "solved", p);
+      const log = p.log || [];
+      log.forEach((e) => add(e.d, e.k, p));
+      // problems redone before the day log existed: keep their last redo date
+      if (p.lastRedoneOn && !log.some((e) => e.k === "redone" && e.d === p.lastRedoneOn)) add(p.lastRedoneOn, "redone", p);
+    });
+    return byDay;
+  }, [problems]);
+  const dayData = dayFilter ? activity.get(dayFilter) || { solved: [], redone: [], marked: [] } : null;
+  const dayProblems = dayData ? [...new Set([...dayData.solved, ...dayData.redone, ...dayData.marked])] : [];
+  const recentDays = useMemo(() => [...activity.keys()].sort().reverse().slice(0, 7), [activity]);
   const redoDueList = redo.filter((p) => p.redoOn && p.redoOn <= today);
   const redoLater = redo.filter((p) => !(p.redoOn && p.redoOn <= today));
 
@@ -182,14 +206,19 @@ export default function Tracker({ session, profile, onSignOut, onSessionChange, 
       solution: form.solution,
     };
     if (editingId) {
-      patch(editingId, asRedo ? { ...fields, redo: true, redoOn: addDays(todayISO(), REDO_GAP_DAYS) } : fields);
+      {
+        const cur = problems.find((x) => x.id === editingId);
+        patch(editingId, asRedo && cur && !cur.redo
+          ? { ...fields, redo: true, redoOn: addDays(todayISO(), REDO_GAP_DAYS), log: logOf(cur, "marked") }
+          : asRedo ? { ...fields, redo: true, redoOn: addDays(todayISO(), REDO_GAP_DAYS) } : fields);
+      }
     } else {
       setProblems((list) => [
         ...list,
         {
           id: newId(), ...fields,
           redo: asRedo, redoOn: asRedo ? addDays(fields.solvedOn, REDO_GAP_DAYS) : null,
-          redoCount: 0, lastRedoneOn: null, createdAt: Date.now(), updatedAt: Date.now(),
+          redoCount: 0, lastRedoneOn: null, log: asRedo ? [{ d: todayISO(), k: "marked" }] : [], createdAt: Date.now(), updatedAt: Date.now(),
         },
       ]);
     }
@@ -207,11 +236,11 @@ export default function Tracker({ session, profile, onSignOut, onSessionChange, 
     scrollToForm();
   };
 
-  const sendToRedo = (p) => patch(p.id, { redo: true, redoOn: addDays(todayISO(), REDO_GAP_DAYS) });
+  const sendToRedo = (p) => patch(p.id, { redo: true, redoOn: addDays(todayISO(), REDO_GAP_DAYS), log: logOf(p, "marked") });
   const redoAgain = (p) =>
-    patch(p.id, { redo: true, redoOn: addDays(todayISO(), REDO_GAP_DAYS), redoCount: (p.redoCount || 0) + 1, lastRedoneOn: todayISO() });
+    patch(p.id, { redo: true, redoOn: addDays(todayISO(), REDO_GAP_DAYS), redoCount: (p.redoCount || 0) + 1, lastRedoneOn: todayISO(), log: [...logOf(p, "redone"), { d: todayISO(), k: "marked" }] });
   const redoDone = (p) =>
-    patch(p.id, { redo: false, redoOn: null, redoCount: (p.redoCount || 0) + 1, lastRedoneOn: todayISO() });
+    patch(p.id, { redo: false, redoOn: null, redoCount: (p.redoCount || 0) + 1, lastRedoneOn: todayISO(), log: logOf(p, "redone") });
   const remove = (p) => { setProblems((list) => list.filter((x) => x.id !== p.id)); setConfirmDel(null); };
 
   /* ---- text file upload: fills the Core logic or Solution box ---- */
@@ -461,6 +490,8 @@ export default function Tracker({ session, profile, onSignOut, onSessionChange, 
         <button className="tab" role="tab" aria-selected={tab === "patterns"} onClick={() => setTab("patterns")}>
           By pattern<span className="count">{groups.length}</span>
         </button>
+        <button className="tab" role="tab" aria-selected={tab === "profile"} onClick={() => setTab("profile")}>Profile</button>
+        <button className="tab" role="tab" aria-selected={tab === "profile"} onClick={() => setTab("profile")}>Profile</button>
       </div>
 
       {tab === "redo" && (
@@ -485,11 +516,61 @@ export default function Tracker({ session, profile, onSignOut, onSessionChange, 
       )}
 
       {tab === "done" && (
-        done.length === 0 ? (
-          <div className="empty"><b>No finished problems yet</b>Log your first problem with the button above. Problems you submit as done, or finish redoing, show up here.</div>
-        ) : (
-          <div className="list">{done.map((p) => renderCard(p, "done"))}</div>
-        )
+        <>
+          <div className="day-filter">
+            <div className="pattern-filter">
+              <button className="pill" aria-pressed={!dayFilter} onClick={() => setDayFilter("")}>All dates</button>
+              <button className="pill" aria-pressed={dayFilter === today} onClick={() => setDayFilter(dayFilter === today ? "" : today)}>Today</button>
+              <button className="pill" aria-pressed={dayFilter === addDays(today, -1)} onClick={() => setDayFilter(dayFilter === addDays(today, -1) ? "" : addDays(today, -1))}>Yesterday</button>
+              <label className="visually-hidden" htmlFor="day-pick">Pick a date</label>
+              <input id="day-pick" className="name-input" type="date" value={dayFilter} max={today} onChange={(e) => setDayFilter(e.target.value)} />
+            </div>
+            {recentDays.length > 0 && (
+              <div className="pattern-filter">
+                {recentDays.map((d) => {
+                  const a = activity.get(d);
+                  return (
+                    <button key={d} className="pill" aria-pressed={dayFilter === d} onClick={() => setDayFilter(dayFilter === d ? "" : d)}>
+                      {fmt(d)}<span className="n">{a.solved.length}/{a.redone.length}/{a.marked.length}</span>
+                    </button>
+                  );
+                })}
+                <span className="hint">solved / redone / marked for redo</span>
+              </div>
+            )}
+          </div>
+
+          {dayFilter ? (
+            <>
+              <div className="stats">
+                <div className="stat"><b>{dayData.solved.length}</b><span>Solved</span></div>
+                <div className="stat"><b>{dayData.redone.length}</b><span>Redone</span></div>
+                <div className="stat"><b>{dayData.marked.length}</b><span>Marked for redo</span></div>
+              </div>
+              <div className="group-title"><h2>{fmtFull(dayFilter)}</h2><span className="hint num">{dayProblems.length} problem{dayProblems.length === 1 ? "" : "s"}</span></div>
+              {dayProblems.length === 0 ? (
+                <div className="empty"><b>Nothing on this date</b>No problem was solved, redone or marked for redo on {fmtFull(dayFilter)}.</div>
+              ) : (
+                <div className="list">{dayProblems.map((p) => renderCard(p, "pattern"))}</div>
+              )}
+            </>
+          ) : done.length === 0 ? (
+            <div className="empty"><b>No finished problems yet</b>Log your first problem with the button above. Problems you submit as done, or finish redoing, show up here.</div>
+          ) : (
+            <div className="list">{done.map((p) => renderCard(p, "done"))}</div>
+          )}
+        </>
+      )}
+
+      {tab === "profile" && (
+        <Account session={session} profile={profile} onSessionChange={onSessionChange} onProfileChange={onProfileChange} onSignOut={onSignOut} />
+      )}
+
+      {tab === "profile" && (
+        <>
+          <Account session={session} profile={profile} onSessionChange={onSessionChange} onProfileChange={onProfileChange} onSignOut={onSignOut} />
+          <Links profile={profile} onProfileChange={onProfileChange} onSignOut={onSignOut} />
+        </>
       )}
 
       {tab === "patterns" && (
@@ -525,8 +606,6 @@ export default function Tracker({ session, profile, onSignOut, onSessionChange, 
         <input id="import-file" ref={importRef} className="visually-hidden" type="file" accept=".json,application/json"
           onChange={(e) => importJson(e.target.files[0])} />
       </div>
-
-      <Account session={session} profile={profile} onSessionChange={onSessionChange} onProfileChange={onProfileChange} onSignOut={onSignOut} />
 
       {toast && <div className="toast" role="status">{toast}</div>}
     </>

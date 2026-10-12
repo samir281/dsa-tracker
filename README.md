@@ -26,6 +26,7 @@ Vite + React + Supabase.
 - My tracker > Account: change short ID, email or password.
 - Email change: with "Confirm email" OFF it applies at once. With it ON, Supabase mails a confirmation link and the old email keeps working until it is opened.
 - Needs the latest `supabase.sql` (adds `profiles`, `login_attempts`, `short_id_available`, `login_email`).
+- My tracker > Profile tab holds Account (short ID, email, password) and Links (GitHub, LinkedIn). Each link has its own "Show on the public leaderboard" switch; only https links to github.com or linkedin.com are accepted.
 
 ## First login
 Sign up with a name, short ID, email and password. To load the problems from the earlier tracker, open "My tracker" > Import backup > choose `samir-starter-problems.json`.

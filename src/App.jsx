@@ -83,7 +83,7 @@ export default function App() {
       )}
       {view === "tracker" && session && !needsProfile && (
         <Tracker key={session.user.id} session={session} profile={profile} onSignOut={logout}
-          onSessionChange={refreshSession} onProfileChange={setProfile} />
+          onSessionChange={refreshSession} onProfileChange={(n) => setProfile((p) => ({ ...(p || {}), ...n }))} />
       )}
     </>
   );
