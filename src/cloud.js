@@ -147,6 +147,11 @@ export async function updateDisplayName(name) {
   return session;
 }
 
+export async function updatePassword(password) {
+  await ensureFresh();
+  await authCall("user", { password }, { method: "PUT", token: session.access_token });
+}
+
 // Public: works without signing in. Returns [{display_name, easy, medium, hard, total, points}].
 export async function getLeaderboard(days) {
   let res;

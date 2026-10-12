@@ -222,3 +222,7 @@ table.lb tr.first td.n.pts { color: var(--accent); text-shadow: 0 0 14px rgba(25
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
+
+/* ---------- account panel ---------- */
+.panel.account { margin-top: 18px; margin-bottom: 0; }
+.account-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
